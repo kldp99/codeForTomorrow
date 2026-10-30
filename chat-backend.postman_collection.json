@@ -1,0 +1,271 @@
+{
+  "info": {
+    "_postman_id": "aiven-mysql-chat-backend-v2",
+    "name": "Chat Backend – Aiven MySQL (Phase 1)",
+    "description": "Tests for the MySQL-backed Chat Backend API.\n\nBase URL: http://localhost:3000/api/v1\n\nPhase 1 covers:\n  - User creation\n  - Get user by ID\n  - Create / get 1:1 chat\n  - List user chats\n\nHow to use:\n  1. Run the seed users (POST /user) requests first.\n  2. Copy the returned userId into the environment variable or path params.\n  3. Create a chat between two users.\n  4. Call create-chat again with the same IDs to verify idempotency.\n  5. List chats for either user.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    { "key": "baseUrl", "value": "http://localhost:3000/api/v1", "type": "string" },
+    { "key": "userAId", "value": "", "type": "string" },
+    { "key": "userBId", "value": "", "type": "string" },
+    { "key": "chatId",  "value": "", "type": "string" }
+  ],
+  "item": [
+    {
+      "name": "Health Check",
+      "item": [
+        {
+          "name": "GET /health",
+          "request": {
+            "method": "GET",
+            "url": { "raw": "http://localhost:3000/health", "host": ["localhost"], "port": "3000", "path": ["health"] }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Users",
+      "item": [
+        {
+          "name": "1 – Create User A (Alice)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "const json = pm.response.json();",
+                  "pm.test('Status 201', () => pm.response.to.have.status(201));",
+                  "pm.test('success true', () => pm.expect(json.success).to.be.true);",
+                  "pm.test('userId present', () => pm.expect(json.userId).to.be.a('string'));",
+                  "pm.collectionVariables.set('userAId', json.userId);"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Alice\",\n  \"email\": \"alice@example.com\"\n}"
+            },
+            "url": { "raw": "{{baseUrl}}/user", "host": ["{{baseUrl}}"], "path": ["user"] }
+          }
+        },
+        {
+          "name": "2 – Create User B (Bob)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "const json = pm.response.json();",
+                  "pm.test('Status 201', () => pm.response.to.have.status(201));",
+                  "pm.collectionVariables.set('userBId', json.userId);"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Bob\",\n  \"email\": \"bob@example.com\"\n}"
+            },
+            "url": { "raw": "{{baseUrl}}/user", "host": ["{{baseUrl}}"], "path": ["user"] }
+          }
+        },
+        {
+          "name": "3 – Get User A by ID",
+          "request": {
+            "method": "GET",
+            "url": { "raw": "{{baseUrl}}/user/{{userAId}}", "host": ["{{baseUrl}}"], "path": ["user", "{{userAId}}"] }
+          }
+        },
+        {
+          "name": "4 – Get User (invalid UUID — expect 400)",
+          "request": {
+            "method": "GET",
+            "url": { "raw": "{{baseUrl}}/user/not-a-uuid", "host": ["{{baseUrl}}"], "path": ["user", "not-a-uuid"] }
+          }
+        },
+        {
+          "name": "5 – Get User (non-existent — expect 404)",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{baseUrl}}/user/00000000-0000-0000-0000-000000000099",
+              "host": ["{{baseUrl}}"],
+              "path": ["user", "00000000-0000-0000-0000-000000000099"]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Chats",
+      "item": [
+        {
+          "name": "6 – Create chat between A and B",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "const json = pm.response.json();",
+                  "pm.test('Status 201', () => pm.response.to.have.status(201));",
+                  "pm.test('success true', () => pm.expect(json.success).to.be.true);",
+                  "pm.test('chatId present', () => pm.expect(json.chatId).to.be.a('string'));",
+                  "pm.test('message is created', () => pm.expect(json.message).to.include('created'));",
+                  "pm.collectionVariables.set('chatId', json.chatId);"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"userAId\": \"{{userAId}}\",\n  \"userBId\": \"{{userBId}}\"\n}"
+            },
+            "url": { "raw": "{{baseUrl}}/chat/create", "host": ["{{baseUrl}}"], "path": ["chat", "create"] }
+          }
+        },
+        {
+          "name": "7 – Create chat again (same users — expect same chatId, 200)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "const json = pm.response.json();",
+                  "pm.test('Status 200', () => pm.response.to.have.status(200));",
+                  "pm.test('Same chatId returned', () => pm.expect(json.chatId).to.equal(pm.collectionVariables.get('chatId')));",
+                  "pm.test('message is retrieved', () => pm.expect(json.message).to.include('retrieved'));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"userAId\": \"{{userAId}}\",\n  \"userBId\": \"{{userBId}}\"\n}"
+            },
+            "url": { "raw": "{{baseUrl}}/chat/create", "host": ["{{baseUrl}}"], "path": ["chat", "create"] }
+          }
+        },
+        {
+          "name": "8 – Create chat reversed order (expect same chatId, 200)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "const json = pm.response.json();",
+                  "pm.test('Status 200 — same chat regardless of order', () => pm.response.to.have.status(200));",
+                  "pm.test('Same chatId returned', () => pm.expect(json.chatId).to.equal(pm.collectionVariables.get('chatId')));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"userAId\": \"{{userBId}}\",\n  \"userBId\": \"{{userAId}}\"\n}"
+            },
+            "url": { "raw": "{{baseUrl}}/chat/create", "host": ["{{baseUrl}}"], "path": ["chat", "create"] }
+          }
+        },
+        {
+          "name": "9 – Self-chat (expect 400)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status 400', () => pm.response.to.have.status(400));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"userAId\": \"{{userAId}}\",\n  \"userBId\": \"{{userAId}}\"\n}"
+            },
+            "url": { "raw": "{{baseUrl}}/chat/create", "host": ["{{baseUrl}}"], "path": ["chat", "create"] }
+          }
+        },
+        {
+          "name": "10 – Chat with non-existent user (expect 404)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status 404', () => pm.response.to.have.status(404));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"userAId\": \"{{userAId}}\",\n  \"userBId\": \"00000000-0000-0000-0000-000000000099\"\n}"
+            },
+            "url": { "raw": "{{baseUrl}}/chat/create", "host": ["{{baseUrl}}"], "path": ["chat", "create"] }
+          }
+        },
+        {
+          "name": "11 – List chats for User A",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "const json = pm.response.json();",
+                  "pm.test('Status 200', () => pm.response.to.have.status(200));",
+                  "pm.test('success true', () => pm.expect(json.success).to.be.true);",
+                  "pm.test('chats is array', () => pm.expect(json.chats).to.be.an('array'));",
+                  "pm.test('chat contains expected fields', () => {",
+                  "  const c = json.chats[0];",
+                  "  pm.expect(c).to.have.property('chatId');",
+                  "  pm.expect(c).to.have.property('chatType');",
+                  "  pm.expect(c).to.have.property('members');",
+                  "  pm.expect(c).to.have.property('createdAt');",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "url": { "raw": "{{baseUrl}}/user/{{userAId}}/chats", "host": ["{{baseUrl}}"], "path": ["user", "{{userAId}}", "chats"] }
+          }
+        },
+        {
+          "name": "12 – List chats for non-existent user (expect 404)",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{baseUrl}}/user/00000000-0000-0000-0000-000000000099/chats",
+              "host": ["{{baseUrl}}"],
+              "path": ["user", "00000000-0000-0000-0000-000000000099", "chats"]
+            }
+          }
+        }
+      ]
+    }
+  ]
+}

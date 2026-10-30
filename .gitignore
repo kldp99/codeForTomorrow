@@ -1,0 +1,28 @@
+# Node
+node_modules/
+dist/
+certs/
+
+# Environment — NEVER commit real credentials
+.env
+.env.local
+.env.*.local
+
+# Firebase
+firebase-service-account.json
+serviceAccountKey.json
+
+# Logs
+logs/
+*.log
+npm-debug.log*
+
+# OS
+.DS_Store
+Thumbs.db
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
