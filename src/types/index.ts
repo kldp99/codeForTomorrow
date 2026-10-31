@@ -78,6 +78,28 @@ export interface GetUserChatsResponse {
   chats: ChatListItem[];
 }
 
+// ─── Message API (Phase 2) ──────────────────────────────────────────────────
+
+export interface SendMessageRequest {
+  senderId: string;
+  text: string;
+}
+
+export interface SendMessageData {
+  messageId: string;
+  chatId: string;
+  senderId: string;
+  text: string;
+  timestamp: string;
+}
+
+export interface SendMessageResponse {
+  success: true;
+  message: string;
+  messageId: string;
+  data: SendMessageData;
+}
+
 // ─── Pagination ──────────────────────────────────────────────────────────────
 
 export interface PaginationOptions {

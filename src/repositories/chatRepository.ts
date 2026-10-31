@@ -115,3 +115,14 @@ export async function getChatMembers(chatId: string): Promise<ChatMember[]> {
   const memberRepo = getChatMemberRepository();
   return await memberRepo.findBy({ chat_id: chatId });
 }
+
+/**
+ * Check whether a specific user is a member of a given chat.
+ */
+export async function isChatMember(
+  chatId: string,
+  userId: string
+): Promise<boolean> {
+  const memberRepo = getChatMemberRepository();
+  return await memberRepo.existsBy({ chat_id: chatId, user_id: userId });
+}

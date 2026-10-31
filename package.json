@@ -9,6 +9,7 @@
     "start": "node dist/server.js",
     "migrate:mysql": "ts-node src/database/migrate.mysql.ts",
     "schema:sync": "ts-node src/database/sync.ts",
+    "test:firestore": "ts-node src/scripts/testFirestore.ts",
     "lint": "eslint src/**/*.ts",
     "typecheck": "tsc --noEmit"
   },

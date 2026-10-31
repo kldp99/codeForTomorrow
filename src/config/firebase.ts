@@ -22,7 +22,11 @@ function initFirebase(): admin.app.App {
   const saPath = config.firebase.serviceAccountPath;
 
   if (saPath) {
-    const resolvedPath = path.resolve(saPath);
+    const projectRoot = path.resolve(__dirname, '../../');
+    const resolvedPath = path.isAbsolute(saPath)
+      ? saPath
+      : path.resolve(projectRoot, saPath);
+
     if (!fs.existsSync(resolvedPath)) {
       throw new Error(
         `[Firebase] Service account file not found at: ${resolvedPath}\n` +

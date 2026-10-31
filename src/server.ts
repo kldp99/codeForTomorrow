@@ -13,6 +13,7 @@
 import 'reflect-metadata';
 import { createApp } from './app';
 import { initializeDataSource, closeDataSource } from './database/data-source';
+import { getFirestore } from './config/firebase';
 import { config } from './config/env';
 
 async function bootstrap(): Promise<void> {
@@ -28,6 +29,16 @@ async function bootstrap(): Promise<void> {
       '    Check MYSQL_* environment variables, ensure the CA certificate is present,\n' +
       '    and verify the Aiven service is running.'
     );
+    process.exit(1);
+  }
+
+  // ── Initialize Firebase Admin SDK & Firestore ─────────────────────────────
+  try {
+    getFirestore();
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    console.error('❌  Firebase initialization failed:', msg);
+    console.error('    Check FIREBASE_SERVICE_ACCOUNT_PATH in certs/ directory.');
     process.exit(1);
   }
 

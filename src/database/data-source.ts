@@ -9,7 +9,11 @@ function loadCaCert(): Buffer | undefined {
   if (!config.mysql.sslCaPath) {
     return undefined;
   }
-  const caPath = path.resolve(config.mysql.sslCaPath);
+  const projectRoot = path.resolve(__dirname, '../../');
+  const caPath = path.isAbsolute(config.mysql.sslCaPath)
+    ? config.mysql.sslCaPath
+    : path.resolve(projectRoot, config.mysql.sslCaPath);
+
   if (fs.existsSync(caPath)) {
     return fs.readFileSync(caPath);
   }

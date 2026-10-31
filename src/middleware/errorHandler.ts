@@ -10,6 +10,7 @@ interface ErrorResponse {
     message: string;
     status: number;
     details?: unknown;
+    stack?: string;
   };
 }
 
@@ -36,34 +37,34 @@ export function errorHandler(
 
   if (err instanceof AppError) {
     // ── Known operational error ──────────────────────────────────────────────
-    status  = err.status;
-    code    = err.code;
+    status = err.status;
+    code = err.code;
     message = err.message;
 
   } else if (isMySQLError(err)) {
     // ── MySQL driver error ───────────────────────────────────────────────────
     const appErr = translateMySQLError(err);
     if (appErr) {
-      status  = appErr.status;
-      code    = appErr.code;
+      status = appErr.status;
+      code = appErr.code;
       message = appErr.message;
     } else {
       // Unrecognised MySQL error — log it, return generic 500
       console.error('[ErrorHandler] Unhandled MySQL error:', err);
-      code    = 'DATABASE_ERROR';
+      code = 'DATABASE_ERROR';
       message = 'A database error occurred';
     }
 
   } else if (err.name === 'ValidationError') {
     // ── Joi validation error ─────────────────────────────────────────────────
-    status  = 400;
-    code    = 'VALIDATION_ERROR';
+    status = 400;
+    code = 'VALIDATION_ERROR';
     message = err.message;
 
   } else if ((err as NodeJS.ErrnoException).code === 'ECONNREFUSED') {
     // ── Database connection refused ──────────────────────────────────────────
-    status  = 503;
-    code    = 'SERVICE_UNAVAILABLE';
+    status = 503;
+    code = 'SERVICE_UNAVAILABLE';
     message = 'Database connection failed';
 
   } else {
@@ -78,6 +79,7 @@ export function errorHandler(
       message,
       status,
       ...(details !== undefined && { details }),
+      ...(config.env === 'development' && { stack: err.stack }),
     },
   };
 

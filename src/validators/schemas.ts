@@ -65,17 +65,17 @@ export const chatIdParamSchema = Joi.object({
   }),
 });
 
-// ─── Legacy schemas (kept for future Firebase message routes) ────────────────
+// ─── POST /chat/:chatId/message/send ─────────────────────────────────────────
 
 export const sendMessageSchema = Joi.object({
-  sender_id: uuid.required().messages({
-    'string.guid':  'sender_id must be a valid UUID',
-    'any.required': 'sender_id is required',
+  senderId: uuid.required().messages({
+    'string.guid':  'senderId must be a valid UUID',
+    'any.required': 'senderId is required',
   }),
-  content: Joi.string().trim().min(1).max(4000).required().messages({
-    'string.empty': 'content cannot be empty',
-    'string.max':   'content cannot exceed 4000 characters',
-    'any.required': 'content is required',
+  text: Joi.string().trim().min(1).max(5000).required().messages({
+    'string.empty': 'text cannot be empty',
+    'string.max':   'text cannot exceed 5000 characters',
+    'any.required': 'text is required',
   }),
 });
 

@@ -104,3 +104,16 @@ export async function assertChatExists(chatId: string): Promise<void> {
     throw AppError.notFound(`Chat ${chatId}`);
   }
 }
+
+/**
+ * Assert that a user is a member of a given chat. Throws 403 if not.
+ */
+export async function assertChatMember(
+  chatId: string,
+  userId: string
+): Promise<void> {
+  const isMember = await chatRepo.isChatMember(chatId, userId);
+  if (!isMember) {
+    throw AppError.forbidden(`User ${userId} is not a member of chat ${chatId}`);
+  }
+}

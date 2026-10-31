@@ -21,6 +21,13 @@
             "method": "GET",
             "url": { "raw": "http://localhost:3000/health", "host": ["localhost"], "port": "3000", "path": ["health"] }
           }
+        },
+        {
+          "name": "GET /api/v1/test/firestore (Firebase Connection Test)",
+          "request": {
+            "method": "GET",
+            "url": { "raw": "{{baseUrl}}/test/firestore", "host": ["{{baseUrl}}"], "path": ["test", "firestore"] }
+          }
         }
       ]
     },
@@ -263,6 +270,145 @@
               "host": ["{{baseUrl}}"],
               "path": ["user", "00000000-0000-0000-0000-000000000099", "chats"]
             }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Messages (Phase 2)",
+      "item": [
+        {
+          "name": "13 – Send valid message (Expect 201)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "const json = pm.response.json();",
+                  "pm.test('Status 201', () => pm.response.to.have.status(201));",
+                  "pm.test('success true', () => pm.expect(json.success).to.be.true);",
+                  "pm.test('messageId present', () => {",
+                  "  pm.expect(json.messageId).to.be.a('string');",
+                  "  pm.expect(json.data.messageId).to.equal(json.messageId);",
+                  "});",
+                  "pm.test('data contains expected fields', () => {",
+                  "  pm.expect(json.data.chatId).to.equal(pm.collectionVariables.get('chatId'));",
+                  "  pm.expect(json.data.senderId).to.equal(pm.collectionVariables.get('userAId'));",
+                  "  pm.expect(json.data.text).to.equal('Hello Bob!');",
+                  "  pm.expect(json.data.timestamp).to.be.a('string');",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"senderId\": \"{{userAId}}\",\n  \"text\": \"Hello Bob!\"\n}"
+            },
+            "url": { "raw": "{{baseUrl}}/chat/{{chatId}}/message/send", "host": ["{{baseUrl}}"], "path": ["chat", "{{chatId}}", "message", "send"] }
+          }
+        },
+        {
+          "name": "14 – Send empty message (Expect 400)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status 400', () => pm.response.to.have.status(400));",
+                  "const json = pm.response.json();",
+                  "pm.test('error message indicates empty text', () => {",
+                  "  pm.expect(json.error.message).to.include('text cannot be empty');",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"senderId\": \"{{userAId}}\",\n  \"text\": \"\"\n}"
+            },
+            "url": { "raw": "{{baseUrl}}/chat/{{chatId}}/message/send", "host": ["{{baseUrl}}"], "path": ["chat", "{{chatId}}", "message", "send"] }
+          }
+        },
+        {
+          "name": "15 – Send message missing senderId (Expect 400)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status 400', () => pm.response.to.have.status(400));",
+                  "const json = pm.response.json();",
+                  "pm.test('error message indicates senderId required', () => {",
+                  "  pm.expect(json.error.message).to.include('senderId is required');",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"text\": \"Missing senderId\"\n}"
+            },
+            "url": { "raw": "{{baseUrl}}/chat/{{chatId}}/message/send", "host": ["{{baseUrl}}"], "path": ["chat", "{{chatId}}", "message", "send"] }
+          }
+        },
+        {
+          "name": "16 – Send message to nonexistent chat (Expect 404)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status 404', () => pm.response.to.have.status(404));",
+                  "const json = pm.response.json();",
+                  "pm.test('code is NOT_FOUND', () => pm.expect(json.error.code).to.equal('NOT_FOUND'));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"senderId\": \"{{userAId}}\",\n  \"text\": \"Hello to nowhere\"\n}"
+            },
+            "url": { "raw": "{{baseUrl}}/chat/00000000-0000-0000-0000-000000000099/message/send", "host": ["{{baseUrl}}"], "path": ["chat", "00000000-0000-0000-0000-000000000099", "message", "send"] }
+          }
+        },
+        {
+          "name": "17 – Send message from non-member user (Expect 403)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status 403', () => pm.response.to.have.status(403));",
+                  "const json = pm.response.json();",
+                  "pm.test('code is FORBIDDEN', () => pm.expect(json.error.code).to.equal('FORBIDDEN'));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"senderId\": \"00000000-0000-0000-0000-000000000003\",\n  \"text\": \"I do not belong in this chat\"\n}"
+            },
+            "url": { "raw": "{{baseUrl}}/chat/{{chatId}}/message/send", "host": ["{{baseUrl}}"], "path": ["chat", "{{chatId}}", "message", "send"] }
           }
         }
       ]
