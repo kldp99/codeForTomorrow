@@ -100,10 +100,69 @@ export interface SendMessageResponse {
   data: SendMessageData;
 }
 
+export interface ChatMessageItem {
+  messageId: string;
+  chatId: string;
+  senderId: string;
+  text: string;
+  timestamp: string; // ISO 8601
+}
+
+export interface GetMessagesQuery {
+  limit?: number | string;
+  cursor?: string;
+  before?: string;
+  userId?: string;
+}
+
+export interface GetMessagesResponse {
+  success: true;
+  messages: ChatMessageItem[];
+  hasMore: boolean;
+  nextCursor: string | null;
+}
+
+export interface MarkMessageReadRequest {
+  userId: string;
+}
+
+export interface ReadReceiptData {
+  chatId: string;
+  messageId: string;
+  userId: string;
+  readAt: string; // ISO 8601
+  isNew: boolean;
+}
+
+export interface MarkMessageReadResponse {
+  success: true;
+  message: string;
+  data: ReadReceiptData;
+}
+
+export interface UpdateLastSeenRequest {
+  userId: string;
+  messageId: string;
+}
+
+export interface LastSeenData {
+  chatId: string;
+  userId: string;
+  messageId: string;
+  lastSeenAt: string; // ISO 8601
+}
+
+export interface UpdateLastSeenResponse {
+  success: true;
+  message: string;
+  data: LastSeenData;
+}
+
 // ─── Pagination ──────────────────────────────────────────────────────────────
 
 export interface PaginationOptions {
   limit: number;
+  cursor?: string;
   before?: string;
 }
 

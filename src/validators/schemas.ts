@@ -12,7 +12,7 @@ import Joi from 'joi';
  * Reusable UUID schema — accepts v3, v4, and v5 UUIDs (case-insensitive).
  */
 const uuid = Joi.string()
-  .uuid({ version: ['uuidv4', 'uuidv3', 'uuidv5'] })
+  .uuid()
   .lowercase()
   .trim();
 
@@ -80,29 +80,44 @@ export const sendMessageSchema = Joi.object({
 });
 
 export const getMessagesQuerySchema = Joi.object({
-  limit:  Joi.number().integer().min(1).max(100).default(50),
-  before: Joi.string().trim().optional(),   // Firestore doc ID cursor
-});
-
-export const readReceiptSchema = Joi.object({
-  user_id: uuid.required().messages({
-    'string.guid':  'user_id must be a valid UUID',
-    'any.required': 'user_id is required',
+  limit: Joi.number().integer().min(1).max(100).default(50).messages({
+    'number.base': 'limit must be a number',
+    'number.integer': 'limit must be an integer',
+    'number.min': 'limit must be at least 1',
+    'number.max': 'limit cannot exceed 100',
+  }),
+  cursor: Joi.string().trim().optional(),
+  before: Joi.string().trim().optional(),
+  userId: uuid.optional().messages({
+    'string.guid': 'userId must be a valid UUID',
   }),
 });
 
-export const lastSeenSchema = Joi.object({
-  user_id: uuid.required().messages({
-    'string.guid':  'user_id must be a valid UUID',
-    'any.required': 'user_id is required',
-  }),
-  message_id: Joi.string().trim().min(1).required().messages({
-    'string.empty': 'message_id cannot be empty',
-    'any.required': 'message_id is required',
+export const markMessageReadSchema = Joi.object({
+  userId: uuid.required().messages({
+    'string.guid':  'userId must be a valid UUID',
+    'any.required': 'userId is required',
   }),
 });
 
-export const messageIdParamSchema = Joi.object({
-  chatId:    uuid.required(),
-  messageId: Joi.string().trim().min(1).required(),
+export const markMessageReadParamSchema = Joi.object({
+  chatId: uuid.required().messages({
+    'string.guid':  'chatId must be a valid UUID',
+    'any.required': 'chatId is required',
+  }),
+  messageId: Joi.string().trim().min(1).required().messages({
+    'string.empty': 'messageId cannot be empty',
+    'any.required': 'messageId is required',
+  }),
+});
+
+export const updateLastSeenSchema = Joi.object({
+  userId: uuid.required().messages({
+    'string.guid':  'userId must be a valid UUID',
+    'any.required': 'userId is required',
+  }),
+  messageId: Joi.string().trim().min(1).required().messages({
+    'string.empty': 'messageId cannot be empty',
+    'any.required': 'messageId is required',
+  }),
 });

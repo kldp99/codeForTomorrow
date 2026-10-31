@@ -1,19 +1,19 @@
 /**
- * API Routes — Phase 1 (MySQL only)
+ * API Routes
  *
- * User routes:
- *   POST   /api/v1/user              — create a user
- *   GET    /api/v1/user/:userId      — get a user by ID
- *   GET    /api/v1/user/:userId/chats — list all chats for a user
+ * User routes (MySQL):
+ *   POST   /api/v1/user                         — create a user
+ *   GET    /api/v1/user/:userId                 — get a user by ID
+ *   GET    /api/v1/user/:userId/chats           — list all chats for a user
  *
- * Chat routes:
- *   POST   /api/v1/chat/create       — create or get a 1:1 chat
+ * Chat routes (MySQL):
+ *   POST   /api/v1/chat/create                  — create or get a 1:1 chat
  *
- * Firebase message routes (Phase 2 — not yet implemented):
- *   POST   /api/v1/chat/:chatId/message/send
- *   GET    /api/v1/chat/:chatId/messages
- *   POST   /api/v1/chat/:chatId/message/:messageId/read
- *   POST   /api/v1/chat/:chatId/lastseen
+ * Message routes (Firestore):
+ *   POST   /api/v1/chat/:chatId/message/send    — send a message
+ *   GET    /api/v1/chat/:chatId/messages        — get messages with pagination
+ *   POST   /api/v1/chat/:chatId/message/:messageId/read — mark message as read
+ *   POST   /api/v1/chat/:chatId/lastseen        — update last seen message
  */
 
 import { Router } from 'express';
@@ -26,6 +26,10 @@ import {
   userIdParamSchema,
   chatIdParamSchema,
   sendMessageSchema,
+  getMessagesQuerySchema,
+  markMessageReadSchema,
+  markMessageReadParamSchema,
+  updateLastSeenSchema,
 } from '../validators/schemas';
 
 const router = Router();
@@ -89,6 +93,53 @@ router.post(
   validate(chatIdParamSchema, 'params'),
   validate(sendMessageSchema, 'body'),
   chatController.sendMessage
+);
+
+/**
+ * GET /api/v1/chat/:chatId/messages
+ * Retrieve messages for a chat with cursor-based pagination.
+ * 1. Validates chatId and query (limit, cursor, userId).
+ * 2. Verifies chat exists and requester is a member using MySQL.
+ * 3. Retrieves messages from Firestore: chats/{chatId}/messages.
+ * 4. Orders by timestamp descending for query, returns in chronological ascending order.
+ */
+router.get(
+  '/chat/:chatId/messages',
+  validate(chatIdParamSchema, 'params'),
+  validate(getMessagesQuerySchema, 'query'),
+  chatController.getMessages
+);
+
+/**
+ * POST /api/v1/chat/:chatId/message/:messageId/read
+ * Mark a message as read by a chat participant.
+ * 1. Validates chatId, messageId, and userId.
+ * 2. Verifies chat exists and user is a chat member using MySQL.
+ * 3. Verifies message exists in Firestore.
+ * 4. Stores read receipt in chats/{chatId}/messages/{messageId}/readReceipts/{userId}.
+ * 5. Handles idempotency (preserves original readAt timestamp).
+ */
+router.post(
+  '/chat/:chatId/message/:messageId/read',
+  validate(markMessageReadParamSchema, 'params'),
+  validate(markMessageReadSchema, 'body'),
+  chatController.markMessageRead
+);
+
+/**
+ * POST /api/v1/chat/:chatId/lastseen
+ * Update the last seen message for a user in a chat.
+ * 1. Validates chatId in params, userId and messageId in body.
+ * 2. Verifies chat exists and user is a chat member using MySQL.
+ * 3. Verifies target message exists in Firestore.
+ * 4. Ensures last seen cannot move backwards to an older message.
+ * 5. Updates chats/{chatId}/lastSeen/{userId}.
+ */
+router.post(
+  '/chat/:chatId/lastseen',
+  validate(chatIdParamSchema, 'params'),
+  validate(updateLastSeenSchema, 'body'),
+  chatController.updateLastSeen
 );
 
 // ─── Isolated Connection Test Route (Non-production only) ───────────────────
@@ -169,11 +220,5 @@ if (config.env !== 'production') {
     }
   });
 }
-
-// ─── Future Firebase Routes (Phase 2 placeholder) ────────────────────────────
-// router.post('/chat/:chatId/message/send',   ...);
-// router.get('/chat/:chatId/messages',        ...);
-// router.post('/chat/:chatId/message/:messageId/read', ...);
-// router.post('/chat/:chatId/lastseen',       ...);
 
 export default router;

@@ -9,7 +9,11 @@
     { "key": "baseUrl", "value": "http://localhost:3000/api/v1", "type": "string" },
     { "key": "userAId", "value": "", "type": "string" },
     { "key": "userBId", "value": "", "type": "string" },
-    { "key": "chatId",  "value": "", "type": "string" }
+    { "key": "chatId",  "value": "", "type": "string" },
+    { "key": "messageId", "value": "", "type": "string" },
+    { "key": "secondMessageId", "value": "", "type": "string" },
+    { "key": "firstReadAt", "value": "", "type": "string" },
+    { "key": "nextCursor", "value": "", "type": "string" }
   ],
   "item": [
     {
@@ -290,6 +294,7 @@
                   "pm.test('messageId present', () => {",
                   "  pm.expect(json.messageId).to.be.a('string');",
                   "  pm.expect(json.data.messageId).to.equal(json.messageId);",
+                  "  pm.collectionVariables.set('messageId', json.messageId);",
                   "});",
                   "pm.test('data contains expected fields', () => {",
                   "  pm.expect(json.data.chatId).to.equal(pm.collectionVariables.get('chatId'));",
@@ -409,6 +414,552 @@
               "raw": "{\n  \"senderId\": \"00000000-0000-0000-0000-000000000003\",\n  \"text\": \"I do not belong in this chat\"\n}"
             },
             "url": { "raw": "{{baseUrl}}/chat/{{chatId}}/message/send", "host": ["{{baseUrl}}"], "path": ["chat", "{{chatId}}", "message", "send"] }
+          }
+        },
+        {
+          "name": "18 – Get messages from existing chat (all)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "const json = pm.response.json();",
+                  "pm.test('Status 200', () => pm.response.to.have.status(200));",
+                  "pm.test('success true', () => pm.expect(json.success).to.be.true);",
+                  "pm.test('messages is array', () => pm.expect(json.messages).to.be.an('array'));",
+                  "pm.test('hasMore is boolean', () => pm.expect(json.hasMore).to.be.a('boolean'));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{baseUrl}}/chat/{{chatId}}/messages?userId={{userAId}}&limit=50",
+              "host": ["{{baseUrl}}"],
+              "path": ["chat", "{{chatId}}", "messages"],
+              "query": [
+                { "key": "userId", "value": "{{userAId}}" },
+                { "key": "limit", "value": "50" }
+              ]
+            }
+          }
+        },
+        {
+          "name": "19 – Get messages from empty chat",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "const json = pm.response.json();",
+                  "pm.test('Status 200', () => pm.response.to.have.status(200));",
+                  "pm.test('messages is empty array', () => pm.expect(json.messages).to.be.empty);",
+                  "pm.test('hasMore is false', () => pm.expect(json.hasMore).to.be.false);",
+                  "pm.test('nextCursor is null', () => pm.expect(json.nextCursor).to.be.null);"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{baseUrl}}/chat/{{chatId}}/messages?userId={{userAId}}&limit=50",
+              "host": ["{{baseUrl}}"],
+              "path": ["chat", "{{chatId}}", "messages"],
+              "query": [
+                { "key": "userId", "value": "{{userAId}}" },
+                { "key": "limit", "value": "50" }
+              ]
+            }
+          }
+        },
+        {
+          "name": "20 – Get messages limit=2 (Capture nextCursor)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "const json = pm.response.json();",
+                  "pm.test('Status 200', () => pm.response.to.have.status(200));",
+                  "pm.test('messages count <= 2', () => pm.expect(json.messages.length).to.be.at.most(2));",
+                  "if (json.nextCursor) {",
+                  "  pm.collectionVariables.set('nextCursor', json.nextCursor);",
+                  "}"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{baseUrl}}/chat/{{chatId}}/messages?userId={{userAId}}&limit=2",
+              "host": ["{{baseUrl}}"],
+              "path": ["chat", "{{chatId}}", "messages"],
+              "query": [
+                { "key": "userId", "value": "{{userAId}}" },
+                { "key": "limit", "value": "2" }
+              ]
+            }
+          }
+        },
+        {
+          "name": "21 – Get messages with nextCursor pagination",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "const json = pm.response.json();",
+                  "pm.test('Status 200', () => pm.response.to.have.status(200));",
+                  "pm.test('messages is array', () => pm.expect(json.messages).to.be.an('array'));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{baseUrl}}/chat/{{chatId}}/messages?userId={{userAId}}&limit=2&cursor={{nextCursor}}",
+              "host": ["{{baseUrl}}"],
+              "path": ["chat", "{{chatId}}", "messages"],
+              "query": [
+                { "key": "userId", "value": "{{userAId}}" },
+                { "key": "limit", "value": "2" },
+                { "key": "cursor", "value": "{{nextCursor}}" }
+              ]
+            }
+          }
+        },
+        {
+          "name": "22 – Get messages invalid chatId (Expect 400)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status 400', () => pm.response.to.have.status(400));",
+                  "const json = pm.response.json();",
+                  "pm.test('code is VALIDATION_ERROR', () => pm.expect(json.error.code).to.equal('VALIDATION_ERROR'));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{baseUrl}}/chat/not-a-valid-uuid/messages?userId={{userAId}}",
+              "host": ["{{baseUrl}}"],
+              "path": ["chat", "not-a-valid-uuid", "messages"],
+              "query": [
+                { "key": "userId", "value": "{{userAId}}" }
+              ]
+            }
+          }
+        },
+        {
+          "name": "23 – Get messages non-member access (Expect 403)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status 403', () => pm.response.to.have.status(403));",
+                  "const json = pm.response.json();",
+                  "pm.test('code is FORBIDDEN', () => pm.expect(json.error.code).to.equal('FORBIDDEN'));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{baseUrl}}/chat/{{chatId}}/messages?userId=00000000-0000-0000-0000-000000000003",
+              "host": ["{{baseUrl}}"],
+              "path": ["chat", "{{chatId}}", "messages"],
+              "query": [
+                { "key": "userId", "value": "00000000-0000-0000-0000-000000000003" }
+              ]
+            }
+          }
+        },
+        {
+          "name": "24 – Get messages nonexistent chat (Expect 404)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status 404', () => pm.response.to.have.status(404));",
+                  "const json = pm.response.json();",
+                  "pm.test('code is NOT_FOUND', () => pm.expect(json.error.code).to.equal('NOT_FOUND'));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{baseUrl}}/chat/00000000-0000-0000-0000-000000000099/messages?userId={{userAId}}",
+              "host": ["{{baseUrl}}"],
+              "path": ["chat", "00000000-0000-0000-0000-000000000099", "messages"],
+              "query": [
+                { "key": "userId", "value": "{{userAId}}" }
+              ]
+            }
+          }
+        },
+        {
+          "name": "25 – Mark message as read by valid member (Expect 200)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "const json = pm.response.json();",
+                  "pm.test('Status 200', () => pm.response.to.have.status(200));",
+                  "pm.test('success true', () => pm.expect(json.success).to.be.true);",
+                  "pm.test('isNew true on first read', () => pm.expect(json.data.isNew).to.be.true);",
+                  "pm.test('readAt timestamp present', () => pm.expect(json.data.readAt).to.be.a('string'));",
+                  "pm.test('userId matches User B', () => pm.expect(json.data.userId).to.equal(pm.collectionVariables.get('userBId')));",
+                  "pm.collectionVariables.set('firstReadAt', json.data.readAt);"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"userId\": \"{{userBId}}\"\n}"
+            },
+            "url": { "raw": "{{baseUrl}}/chat/{{chatId}}/message/{{messageId}}/read", "host": ["{{baseUrl}}"], "path": ["chat", "{{chatId}}", "message", "{{messageId}}", "read"] }
+          }
+        },
+        {
+          "name": "26 – Idempotent mark message as read again (Expect 200, readAt preserved)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "const json = pm.response.json();",
+                  "pm.test('Status 200', () => pm.response.to.have.status(200));",
+                  "pm.test('success true', () => pm.expect(json.success).to.be.true);",
+                  "pm.test('isNew false on repeated read', () => pm.expect(json.data.isNew).to.be.false);",
+                  "pm.test('readAt preserved identically', () => {",
+                  "  pm.expect(json.data.readAt).to.equal(pm.collectionVariables.get('firstReadAt'));",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"userId\": \"{{userBId}}\"\n}"
+            },
+            "url": { "raw": "{{baseUrl}}/chat/{{chatId}}/message/{{messageId}}/read", "host": ["{{baseUrl}}"], "path": ["chat", "{{chatId}}", "message", "{{messageId}}", "read"] }
+          }
+        },
+        {
+          "name": "27 – Mark message read by non-member (Expect 403)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status 403', () => pm.response.to.have.status(403));",
+                  "const json = pm.response.json();",
+                  "pm.test('code is FORBIDDEN', () => pm.expect(json.error.code).to.equal('FORBIDDEN'));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"userId\": \"00000000-0000-0000-0000-000000000003\"\n}"
+            },
+            "url": { "raw": "{{baseUrl}}/chat/{{chatId}}/message/{{messageId}}/read", "host": ["{{baseUrl}}"], "path": ["chat", "{{chatId}}", "message", "{{messageId}}", "read"] }
+          }
+        },
+        {
+          "name": "28 – Mark message read nonexistent message ID (Expect 404)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status 404', () => pm.response.to.have.status(404));",
+                  "const json = pm.response.json();",
+                  "pm.test('code is NOT_FOUND', () => pm.expect(json.error.code).to.equal('NOT_FOUND'));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"userId\": \"{{userBId}}\"\n}"
+            },
+            "url": { "raw": "{{baseUrl}}/chat/{{chatId}}/message/nonexistent_msg_99999/read", "host": ["{{baseUrl}}"], "path": ["chat", "{{chatId}}", "message", "nonexistent_msg_99999", "read"] }
+          }
+        },
+        {
+          "name": "29 – Mark message read nonexistent chat ID (Expect 404)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status 404', () => pm.response.to.have.status(404));",
+                  "const json = pm.response.json();",
+                  "pm.test('code is NOT_FOUND', () => pm.expect(json.error.code).to.equal('NOT_FOUND'));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"userId\": \"{{userBId}}\"\n}"
+            },
+            "url": { "raw": "{{baseUrl}}/chat/00000000-0000-0000-0000-000000000099/message/{{messageId}}/read", "host": ["{{baseUrl}}"], "path": ["chat", "00000000-0000-0000-0000-000000000099", "message", "{{messageId}}", "read"] }
+          }
+        },
+        {
+          "name": "30 – Mark message read missing userId (Expect 400)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status 400', () => pm.response.to.have.status(400));",
+                  "const json = pm.response.json();",
+                  "pm.test('error indicates userId is required', () => {",
+                  "  pm.expect(json.error.message).to.include('userId is required');",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{}"
+            },
+            "url": { "raw": "{{baseUrl}}/chat/{{chatId}}/message/{{messageId}}/read", "host": ["{{baseUrl}}"], "path": ["chat", "{{chatId}}", "message", "{{messageId}}", "read"] }
+          }
+        },
+        {
+          "name": "31 – Mark message read invalid chatId format (Expect 400)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status 400', () => pm.response.to.have.status(400));",
+                  "const json = pm.response.json();",
+                  "pm.test('code is VALIDATION_ERROR', () => pm.expect(json.error.code).to.equal('VALIDATION_ERROR'));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"userId\": \"{{userBId}}\"\n}"
+            },
+            "url": { "raw": "{{baseUrl}}/chat/not-a-valid-uuid/message/{{messageId}}/read", "host": ["{{baseUrl}}"], "path": ["chat", "not-a-valid-uuid", "message", "{{messageId}}", "read"] }
+          }
+        },
+        {
+          "name": "32 – Send second message (for ordering tests)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "const json = pm.response.json();",
+                  "pm.test('Status 201', () => pm.response.to.have.status(201));",
+                  "pm.collectionVariables.set('secondMessageId', json.messageId);"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"senderId\": \"{{userAId}}\",\n  \"text\": \"Second message for last seen ordering\"\n}"
+            },
+            "url": { "raw": "{{baseUrl}}/chat/{{chatId}}/message/send", "host": ["{{baseUrl}}"], "path": ["chat", "{{chatId}}", "message", "send"] }
+          }
+        },
+        {
+          "name": "33 – Update last seen to existing message (Expect 200)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "const json = pm.response.json();",
+                  "pm.test('Status 200', () => pm.response.to.have.status(200));",
+                  "pm.test('success true', () => pm.expect(json.success).to.be.true);",
+                  "pm.test('userId matches User B', () => pm.expect(json.data.userId).to.equal(pm.collectionVariables.get('userBId')));",
+                  "pm.test('messageId matches first message', () => pm.expect(json.data.messageId).to.equal(pm.collectionVariables.get('messageId')));",
+                  "pm.test('lastSeenAt present', () => pm.expect(json.data.lastSeenAt).to.be.a('string'));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"userId\": \"{{userBId}}\",\n  \"messageId\": \"{{messageId}}\"\n}"
+            },
+            "url": { "raw": "{{baseUrl}}/chat/{{chatId}}/lastseen", "host": ["{{baseUrl}}"], "path": ["chat", "{{chatId}}", "lastseen"] }
+          }
+        },
+        {
+          "name": "34 – Update last seen to newer message (Expect 200)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "const json = pm.response.json();",
+                  "pm.test('Status 200', () => pm.response.to.have.status(200));",
+                  "pm.test('success true', () => pm.expect(json.success).to.be.true);",
+                  "pm.test('messageId updated to second message', () => pm.expect(json.data.messageId).to.equal(pm.collectionVariables.get('secondMessageId')));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"userId\": \"{{userBId}}\",\n  \"messageId\": \"{{secondMessageId}}\"\n}"
+            },
+            "url": { "raw": "{{baseUrl}}/chat/{{chatId}}/lastseen", "host": ["{{baseUrl}}"], "path": ["chat", "{{chatId}}", "lastseen"] }
+          }
+        },
+        {
+          "name": "35 – Try updating last seen to older message (Expect 400)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status 400', () => pm.response.to.have.status(400));",
+                  "const json = pm.response.json();",
+                  "pm.test('error indicates cannot move backwards', () => {",
+                  "  pm.expect(json.error.message).to.include('Cannot move last seen backwards');",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"userId\": \"{{userBId}}\",\n  \"messageId\": \"{{messageId}}\"\n}"
+            },
+            "url": { "raw": "{{baseUrl}}/chat/{{chatId}}/lastseen", "host": ["{{baseUrl}}"], "path": ["chat", "{{chatId}}", "lastseen"] }
+          }
+        },
+        {
+          "name": "36 – Try updating last seen invalid message ID (Expect 404)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status 404', () => pm.response.to.have.status(404));",
+                  "const json = pm.response.json();",
+                  "pm.test('code is NOT_FOUND', () => pm.expect(json.error.code).to.equal('NOT_FOUND'));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"userId\": \"{{userBId}}\",\n  \"messageId\": \"nonexistent_msg_99999\"\n}"
+            },
+            "url": { "raw": "{{baseUrl}}/chat/{{chatId}}/lastseen", "host": ["{{baseUrl}}"], "path": ["chat", "{{chatId}}", "lastseen"] }
+          }
+        },
+        {
+          "name": "37 – Try updating last seen nonexistent chat (Expect 404)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status 404', () => pm.response.to.have.status(404));",
+                  "const json = pm.response.json();",
+                  "pm.test('code is NOT_FOUND', () => pm.expect(json.error.code).to.equal('NOT_FOUND'));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"userId\": \"{{userBId}}\",\n  \"messageId\": \"{{secondMessageId}}\"\n}"
+            },
+            "url": { "raw": "{{baseUrl}}/chat/00000000-0000-0000-0000-000000000099/lastseen", "host": ["{{baseUrl}}"], "path": ["chat", "00000000-0000-0000-0000-000000000099", "lastseen"] }
+          }
+        },
+        {
+          "name": "38 – Try updating last seen non-member user (Expect 403)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status 403', () => pm.response.to.have.status(403));",
+                  "const json = pm.response.json();",
+                  "pm.test('code is FORBIDDEN', () => pm.expect(json.error.code).to.equal('FORBIDDEN'));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"userId\": \"00000000-0000-0000-0000-000000000003\",\n  \"messageId\": \"{{secondMessageId}}\"\n}"
+            },
+            "url": { "raw": "{{baseUrl}}/chat/{{chatId}}/lastseen", "host": ["{{baseUrl}}"], "path": ["chat", "{{chatId}}", "lastseen"] }
           }
         }
       ]

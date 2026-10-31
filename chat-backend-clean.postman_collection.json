@@ -1,0 +1,351 @@
+{
+  "info": {
+    "_postman_id": "chat-backend-submission-v2",
+    "name": "Chat Backend API – Final Submission",
+    "description": "Clean Postman collection for the Chat Backend API containing the required core endpoints across Users, Chats, and Messages.\n\nBase URL: http://localhost:3000/api/v1\n\nExecution Order:\n1. POST /user (Create User A - Alice)\n2. POST /user (Create User B - Bob)\n3. GET /user/:userId (Get User A by ID)\n4. POST /chat/create (Create 1:1 Chat between User A & User B)\n5. GET /user/:userId/chats (List User A Chats)\n6. POST /chat/:chatId/message/send (User A sends Message to Chat)\n7. GET /chat/:chatId/messages (Get Messages with Pagination)\n8. POST /chat/:chatId/message/:messageId/read (User B marks Message as Read)\n9. POST /chat/:chatId/lastseen (User B updates Last Seen)",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    { "key": "baseUrl", "value": "http://localhost:3000/api/v1", "type": "string" },
+    { "key": "userAId", "value": "", "type": "string" },
+    { "key": "userBId", "value": "", "type": "string" },
+    { "key": "chatId", "value": "", "type": "string" },
+    { "key": "messageId", "value": "", "type": "string" }
+  ],
+  "item": [
+    {
+      "name": "Users",
+      "item": [
+        {
+          "name": "1. Create User A (Alice)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status code is 201', () => {",
+                  "  pm.response.to.have.status(201);",
+                  "});",
+                  "const json = pm.response.json();",
+                  "pm.test('User A created successfully', () => {",
+                  "  pm.expect(json.success).to.be.true;",
+                  "  pm.expect(json.userId).to.be.a('string');",
+                  "});",
+                  "if (json.userId) {",
+                  "  pm.collectionVariables.set('userAId', json.userId);",
+                  "}"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Alice\",\n  \"email\": \"alice_{{$timestamp}}@example.com\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/user",
+              "host": ["{{baseUrl}}"],
+              "path": ["user"]
+            }
+          }
+        },
+        {
+          "name": "2. Create User B (Bob)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status code is 201', () => {",
+                  "  pm.response.to.have.status(201);",
+                  "});",
+                  "const json = pm.response.json();",
+                  "pm.test('User B created successfully', () => {",
+                  "  pm.expect(json.success).to.be.true;",
+                  "  pm.expect(json.userId).to.be.a('string');",
+                  "});",
+                  "if (json.userId) {",
+                  "  pm.collectionVariables.set('userBId', json.userId);",
+                  "}"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Bob\",\n  \"email\": \"bob_{{$timestamp}}@example.com\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/user",
+              "host": ["{{baseUrl}}"],
+              "path": ["user"]
+            }
+          }
+        },
+        {
+          "name": "3. Get User A by ID",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status code is 200', () => {",
+                  "  pm.response.to.have.status(200);",
+                  "});",
+                  "const json = pm.response.json();",
+                  "pm.test('User retrieved successfully', () => {",
+                  "  pm.expect(json.success).to.be.true;",
+                  "  pm.expect(json.user.id).to.equal(pm.collectionVariables.get('userAId'));",
+                  "  pm.expect(json.user.name).to.be.a('string');",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{baseUrl}}/user/{{userAId}}",
+              "host": ["{{baseUrl}}"],
+              "path": ["user", "{{userAId}}"]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Chats",
+      "item": [
+        {
+          "name": "4. Create or Get 1:1 Chat",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status code is 200 or 201', () => {",
+                  "  pm.expect([200, 201]).to.include(pm.response.code);",
+                  "});",
+                  "const json = pm.response.json();",
+                  "pm.test('Chat retrieved or created successfully', () => {",
+                  "  pm.expect(json.success).to.be.true;",
+                  "  pm.expect(json.chatId).to.be.a('string');",
+                  "});",
+                  "if (json.chatId) {",
+                  "  pm.collectionVariables.set('chatId', json.chatId);",
+                  "}"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"userAId\": \"{{userAId}}\",\n  \"userBId\": \"{{userBId}}\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/chat/create",
+              "host": ["{{baseUrl}}"],
+              "path": ["chat", "create"]
+            }
+          }
+        },
+        {
+          "name": "5. List User Chats",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status code is 200', () => {",
+                  "  pm.response.to.have.status(200);",
+                  "});",
+                  "const json = pm.response.json();",
+                  "pm.test('Chats list retrieved successfully', () => {",
+                  "  pm.expect(json.success).to.be.true;",
+                  "  pm.expect(json.chats).to.be.an('array');",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{baseUrl}}/user/{{userAId}}/chats",
+              "host": ["{{baseUrl}}"],
+              "path": ["user", "{{userAId}}", "chats"]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Messages",
+      "item": [
+        {
+          "name": "6. Send Message",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status code is 201', () => {",
+                  "  pm.response.to.have.status(201);",
+                  "});",
+                  "const json = pm.response.json();",
+                  "pm.test('Message sent successfully', () => {",
+                  "  pm.expect(json.success).to.be.true;",
+                  "  pm.expect(json.messageId).to.be.a('string');",
+                  "  pm.expect(json.data.text).to.equal('Hello Bob!');",
+                  "});",
+                  "if (json.messageId) {",
+                  "  pm.collectionVariables.set('messageId', json.messageId);",
+                  "}"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"senderId\": \"{{userAId}}\",\n  \"text\": \"Hello Bob!\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/chat/{{chatId}}/message/send",
+              "host": ["{{baseUrl}}"],
+              "path": ["chat", "{{chatId}}", "message", "send"]
+            }
+          }
+        },
+        {
+          "name": "7. Get Messages (with Pagination)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status code is 200', () => {",
+                  "  pm.response.to.have.status(200);",
+                  "});",
+                  "const json = pm.response.json();",
+                  "pm.test('Messages retrieved successfully', () => {",
+                  "  pm.expect(json.success).to.be.true;",
+                  "  pm.expect(json.messages).to.be.an('array');",
+                  "  pm.expect(json.hasMore).to.be.a('boolean');",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{baseUrl}}/chat/{{chatId}}/messages?limit=50&userId={{userAId}}",
+              "host": ["{{baseUrl}}"],
+              "path": ["chat", "{{chatId}}", "messages"],
+              "query": [
+                { "key": "limit", "value": "50" },
+                { "key": "userId", "value": "{{userAId}}" }
+              ]
+            }
+          }
+        },
+        {
+          "name": "8. Mark Message as Read",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status code is 200', () => {",
+                  "  pm.response.to.have.status(200);",
+                  "});",
+                  "const json = pm.response.json();",
+                  "pm.test('Message marked as read successfully', () => {",
+                  "  pm.expect(json.success).to.be.true;",
+                  "  pm.expect(json.data.chatId).to.equal(pm.collectionVariables.get('chatId'));",
+                  "  pm.expect(json.data.messageId).to.equal(pm.collectionVariables.get('messageId'));",
+                  "  pm.expect(json.data.userId).to.equal(pm.collectionVariables.get('userBId'));",
+                  "  pm.expect(json.data.readAt).to.be.a('string');",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"userId\": \"{{userBId}}\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/chat/{{chatId}}/message/{{messageId}}/read",
+              "host": ["{{baseUrl}}"],
+              "path": ["chat", "{{chatId}}", "message", "{{messageId}}", "read"]
+            }
+          }
+        },
+        {
+          "name": "9. Update Last Seen",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status code is 200', () => {",
+                  "  pm.response.to.have.status(200);",
+                  "});",
+                  "const json = pm.response.json();",
+                  "pm.test('Last seen updated successfully', () => {",
+                  "  pm.expect(json.success).to.be.true;",
+                  "  pm.expect(json.data.chatId).to.equal(pm.collectionVariables.get('chatId'));",
+                  "  pm.expect(json.data.userId).to.equal(pm.collectionVariables.get('userBId'));",
+                  "  pm.expect(json.data.messageId).to.equal(pm.collectionVariables.get('messageId'));",
+                  "  pm.expect(json.data.lastSeenAt).to.be.a('string');",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"userId\": \"{{userBId}}\",\n  \"messageId\": \"{{messageId}}\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/chat/{{chatId}}/lastseen",
+              "host": ["{{baseUrl}}"],
+              "path": ["chat", "{{chatId}}", "lastseen"]
+            }
+          }
+        }
+      ]
+    }
+  ]
+}

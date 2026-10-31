@@ -24,17 +24,6 @@ export const config = {
     sslCaPath: optional('MYSQL_SSL_CA', './certs/ca.pem'),
   },
 
-  // ── Legacy PostgreSQL (kept for reference / future migration notes) ───────
-  db: {
-    connectionString: optional('DATABASE_URL', ''),
-    host:     optional('DB_HOST', 'localhost'),
-    port:     parseInt(optional('DB_PORT', '5432'), 10),
-    name:     optional('DB_NAME', 'chat_db'),
-    user:     optional('DB_USER', 'postgres'),
-    password: optional('DB_PASSWORD', ''),
-    ssl:      optional('DB_SSL', 'false') === 'true',
-  },
-
   firebase: {
     serviceAccountPath: optional('FIREBASE_SERVICE_ACCOUNT_PATH', ''),
     projectId:    optional('FIREBASE_PROJECT_ID', ''),

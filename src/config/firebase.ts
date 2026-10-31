@@ -76,3 +76,13 @@ export function messagesCollection(
 ): FirebaseFirestore.CollectionReference<FirebaseFirestore.DocumentData> {
   return getFirestore().collection('chats').doc(chatId).collection('messages');
 }
+
+/**
+ * Shorthand for the `lastSeen` sub-collection inside a chat document:
+ * chats/{chatId}/lastSeen
+ */
+export function lastSeenCollection(
+  chatId: string
+): FirebaseFirestore.CollectionReference<FirebaseFirestore.DocumentData> {
+  return getFirestore().collection('chats').doc(chatId).collection('lastSeen');
+}

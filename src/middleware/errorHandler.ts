@@ -10,7 +10,6 @@ interface ErrorResponse {
     message: string;
     status: number;
     details?: unknown;
-    stack?: string;
   };
 }
 
@@ -79,7 +78,6 @@ export function errorHandler(
       message,
       status,
       ...(details !== undefined && { details }),
-      ...(config.env === 'development' && { stack: err.stack }),
     },
   };
 

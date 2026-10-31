@@ -1,6 +1,6 @@
 # 💬 Chat Backend API
 
-A production-ready chat backend built with **Node.js**, **Express**, **TypeScript (strict mode)**, **PostgreSQL**, and **Firebase Firestore**.
+A production-ready, strictly-typed chat backend built with **Node.js**, **Express**, **TypeScript (strict mode)**, **TypeORM + Aiven Cloud MySQL**, and **Firebase Admin SDK (Cloud Firestore)**.
 
 ---
 
@@ -10,11 +10,12 @@ A production-ready chat backend built with **Node.js**, **Express**, **TypeScrip
 - [Prerequisites](#prerequisites)
 - [Setup & Installation](#setup--installation)
 - [Firebase Setup](#firebase-setup)
+- [Database Setup & Migrations](#database-setup--migrations)
 - [Running the Server](#running-the-server)
 - [API Reference](#api-reference)
 - [Postman Collection](#postman-collection)
 - [Project Structure](#project-structure)
-- [Design Decisions](#design-decisions)
+- [Security & Design Decisions](#security--design-decisions)
 
 ---
 
@@ -22,428 +23,404 @@ A production-ready chat backend built with **Node.js**, **Express**, **TypeScrip
 
 | Layer | Technology | Purpose |
 |---|---|---|
-| HTTP server | Express 4 + TypeScript | REST API routing |
-| Relational data | PostgreSQL | Users, chats, membership |
-| Message storage | Firebase Firestore | Messages, read receipts, timestamps |
-| Validation | Joi | Request body/params/query validation |
-| Security | Helmet, CORS, express-rate-limit | HTTP hardening |
+| **Runtime & Language** | Node.js (≥18) + TypeScript (strict mode) | Core server platform with compile-time type safety |
+| **HTTP Framework** | Express 4 | RESTful routing, middleware pipelines |
+| **Relational Database** | Aiven Cloud MySQL + TypeORM | Users, chats, chat memberships, order-independent deduplication |
+| **Document Store** | Firebase Firestore (Admin SDK) | Messages, per-user read receipts, per-user last-seen tracking |
+| **Validation** | Joi | Declarative schema validation for params, body, and query |
+| **Security** | Helmet, CORS, express-rate-limit | HTTP header hardening, rate limiting, and CORS configuration |
 
-**Data split rationale:**
-- **PostgreSQL** stores structural data: who belongs to which chat. This enables fast joins and strict relational constraints (FK, unique constraints).
-- **Firestore** stores time-series message data. Its real-time capabilities, `serverTimestamp()`, and `arrayUnion` for read receipts make it ideal for high-volume chat messages.
+**Data Storage Strategy:**
+- **MySQL (via TypeORM)**: Handles relational integrity and relational membership. Stores users, chats, and memberships (`users`, `chats`, `chat_members`). Uses transactions for chat creation and unique constraint indexing for deterministic 1:1 chat deduplication.
+- **Cloud Firestore**: Handles time-series message events and high-concurrency sub-collections:
+  - Messages: `chats/{chatId}/messages/{messageId}`
+  - Read Receipts: `chats/{chatId}/messages/{messageId}/readReceipts/{userId}`
+  - Last Seen: `chats/{chatId}/lastSeen/{userId}`
 
 ---
 
 ## Prerequisites
 
-- Node.js ≥ 18
-- PostgreSQL ≥ 14
-- Firebase project with Firestore enabled
-- A Firebase service account JSON
+- **Node.js**: `v18.0.0` or higher
+- **npm**: `v9.0.0` or higher
+- **MySQL Database**: Aiven Cloud MySQL instance (or standard MySQL 8.0+)
+- **Firebase Project**: Cloud Firestore enabled in Native mode with service account credentials
 
 ---
 
 ## Setup & Installation
 
-### 1. Clone and install dependencies
+### 1. Clone repository and install dependencies
 
 ```bash
 git clone <repo-url>
-cd chat-backend
+cd codeForTomorrow
 npm install
 ```
 
-### 2. Configure environment variables
+### 2. Configure Environment Variables
+
+Copy the example environment configuration:
 
 ```bash
 cp .env.example .env
 ```
 
-Edit `.env` with your actual values:
+Configure the environment variables in `.env`:
 
 ```env
 # Server
 PORT=3000
 NODE_ENV=development
 
-# PostgreSQL
-DB_HOST=localhost
-DB_PORT=5432
-DB_NAME=chat_db
-DB_USER=postgres
-DB_PASSWORD=your_password
+# Aiven Cloud MySQL
+MYSQL_HOST=mysql-your-instance.aivencloud.com
+MYSQL_PORT=28314
+MYSQL_DATABASE=defaultdb
+MYSQL_USER=avnadmin
+MYSQL_PASSWORD=your_mysql_password
+MYSQL_SSL_CA=./certs/ca.pem
 
-# Firebase (choose one option below)
-FIREBASE_SERVICE_ACCOUNT_PATH=./firebase-service-account.json
-# OR use inline vars:
-# FIREBASE_PROJECT_ID=...
-# FIREBASE_CLIENT_EMAIL=...
-# FIREBASE_PRIVATE_KEY="-----BEGIN PRIVATE KEY-----\n...\n-----END PRIVATE KEY-----\n"
+# Firebase Admin SDK
+FIREBASE_SERVICE_ACCOUNT_PATH=./certs/firebase-service-account.json
+
+# Security & Rate Limiting
+JWT_SECRET=your_jwt_secret
+RATE_LIMIT_WINDOW_MS=900000
+RATE_LIMIT_MAX=100
 ```
-
-### 3. Create the PostgreSQL database
-
-```sql
-CREATE DATABASE chat_db;
-```
-
-### 4. Run database migrations
-
-```bash
-npm run migrate
-```
-
-This will:
-- Create the `users`, `chats`, and `chat_members` tables
-- Create indexes and triggers
-- Insert 3 seed users for testing (Alice, Bob, Carol)
 
 ---
 
 ## Firebase Setup
 
-1. Go to the [Firebase Console](https://console.firebase.google.com)
-2. Create a new project (or use an existing one)
-3. Enable **Firestore Database** (start in test mode for development)
-4. Go to **Project Settings → Service accounts**
-5. Click **Generate new private key** — download the JSON file
-6. Place it at the project root and name it `firebase-service-account.json`
-7. Set `FIREBASE_SERVICE_ACCOUNT_PATH=./firebase-service-account.json` in `.env`
+1. Open the [Firebase Console](https://console.firebase.google.com/).
+2. Select your project and navigate to **Build → Firestore Database** (ensure it is created in Native mode).
+3. Navigate to **Project Settings (gear icon) → Service Accounts**.
+4. Click **Generate new private key** to download the service account JSON.
+5. Place the downloaded JSON file in the `certs/` directory:
+   ```
+   certs/firebase-service-account.json
+   ```
+   *(Note: The `certs/` directory is automatically ignored by `.gitignore` to prevent credential exposure).*
 
-**Firestore Data Structure:**
+---
+
+## Database Setup & Migrations
+
+Synchronize the MySQL schema using TypeORM:
+
+```bash
+npm run schema:sync
 ```
-chats/
-  {chatId}/
-    messages/
-      {messageId}/
-        chat_id: string
-        sender_id: string
-        content: string
-        timestamp: Timestamp
-        read_by: string[]
-        deleted: boolean
-```
+
+This ensures the required MySQL tables (`users`, `chats`, `chat_members`) and indexes are properly created in the database.
 
 ---
 
 ## Running the Server
 
+### Development Mode
+Runs the server with hot-reload:
 ```bash
-# Development (with hot reload)
 npm run dev
+```
 
-# Production
+### Production Build & Start
+Compiles TypeScript to JavaScript in `dist/` and starts the Node process:
+```bash
 npm run build
 npm start
+```
 
-# TypeScript type check (no emit)
+### Type Checking
+Runs TypeScript type check without emitting files:
+```bash
 npm run typecheck
 ```
 
-Server starts at: `http://localhost:3000`
+Server endpoints:
+- **Base URL**: `http://localhost:3000/api/v1`
+- **Health Check**: `http://localhost:3000/health`
 
 ---
 
 ## API Reference
 
-All API endpoints are prefixed with `/api/v1`.
+All API routes are prefixed with `/api/v1`.
 
-### Authentication
-
-All requests support an optional `x-user-id` header. This is used for access control checks (e.g., verifying a sender is a member of a chat).
+### 1. Create User
+- **Method**: `POST`
+- **Endpoint**: `/api/v1/user`
+- **Request Body**:
+  ```json
+  {
+    "name": "Alice",
+    "email": "alice@example.com"
+  }
+  ```
+- **Response `201 Created`**:
+  ```json
+  {
+    "success": true,
+    "userId": "e19300cd-d492-429b-a6ee-d4a4f9651493",
+    "message": "User created successfully"
+  }
+  ```
 
 ---
 
-### `POST /api/v1/chat/create`
-
-Create a new 1:1 chat between two users. Returns the existing chat if one already exists (duplicate prevention).
-
-**Request Body:**
-```json
-{
-  "user1_id": "00000000-0000-0000-0000-000000000001",
-  "user2_id": "00000000-0000-0000-0000-000000000002"
-}
-```
-
-**Response `201` (created):**
-```json
-{
-  "success": true,
-  "data": {
-    "chat_id": "f47ac10b-58cc-4372-a567-0e02b2c3d479",
-    "created": true,
-    "members": [
-      "00000000-0000-0000-0000-000000000001",
-      "00000000-0000-0000-0000-000000000002"
-    ]
+### 2. Get User by ID
+- **Method**: `GET`
+- **Endpoint**: `/api/v1/user/:userId`
+- **Response `200 OK`**:
+  ```json
+  {
+    "success": true,
+    "user": {
+      "id": "e19300cd-d492-429b-a6ee-d4a4f9651493",
+      "name": "Alice",
+      "email": "alice@example.com",
+      "createdAt": "2026-10-31T01:07:20.000Z",
+      "updatedAt": "2026-10-31T01:07:20.000Z"
+    }
   }
-}
-```
-
-**Response `200` (already exists):**
-```json
-{
-  "success": true,
-  "data": {
-    "chat_id": "f47ac10b-58cc-4372-a567-0e02b2c3d479",
-    "created": false,
-    "members": ["..."]
-  }
-}
-```
+  ```
 
 ---
 
-### `POST /api/v1/chat/:chatId/message/send`
-
-Send a message in a chat. The message is stored in Firestore with a server-side timestamp.
-
-**Request Body:**
-```json
-{
-  "sender_id": "00000000-0000-0000-0000-000000000001",
-  "content": "Hello, World!"
-}
-```
-
-**Response `201`:**
-```json
-{
-  "success": true,
-  "data": {
-    "message_id": "KxZ8a1bQ3rTqYpN2mJwL",
-    "chat_id": "f47ac10b-58cc-4372-a567-0e02b2c3d479",
-    "sender_id": "00000000-0000-0000-0000-000000000001",
-    "content": "Hello, World!",
-    "timestamp": "2026-10-27T02:14:31.000Z"
+### 3. Create or Get 1:1 Chat
+- **Method**: `POST`
+- **Endpoint**: `/api/v1/chat/create`
+- **Behavior**: Uses an order-independent conversation key. Returns existing chat if already created.
+- **Request Body**:
+  ```json
+  {
+    "userAId": "e19300cd-d492-429b-a6ee-d4a4f9651493",
+    "userBId": "2149cbe3-a2d2-444e-9a42-342513770b15"
   }
-}
-```
+  ```
+- **Response `201 Created`** (new chat) or **`200 OK`** (existing chat):
+  ```json
+  {
+    "success": true,
+    "chatId": "acb0aa2a-6cac-490f-bc1f-0c287f0a7d36",
+    "message": "Chat created successfully"
+  }
+  ```
 
 ---
 
-### `GET /api/v1/chat/:chatId/messages?limit=50`
-
-Fetch paginated messages for a chat, ordered by timestamp descending (newest first).
-
-**Query Parameters:**
-
-| Param | Type | Default | Description |
-|---|---|---|---|
-| `limit` | integer | 50 | Number of messages per page (max 100) |
-| `before` | string | — | Firestore document ID for cursor-based pagination |
-
-**Response `200`:**
-```json
-{
-  "success": true,
-  "data": {
-    "messages": [
-      {
-        "id": "KxZ8a1bQ3rTqYpN2mJwL",
-        "chat_id": "f47ac10b-58cc-4372-a567-0e02b2c3d479",
-        "sender_id": "00000000-0000-0000-0000-000000000001",
-        "content": "Hello, World!",
-        "timestamp": "2026-10-27T02:14:31.000Z",
-        "read_by": ["00000000-0000-0000-0000-000000000001"]
-      }
-    ],
-    "has_more": false,
-    "next_cursor": null
-  }
-}
-```
-
-**Pagination example:**
-```
-GET /api/v1/chat/{chatId}/messages?limit=10
-→ next_cursor: "KxZ8a1bQ3rTqYpN2mJwL"
-
-GET /api/v1/chat/{chatId}/messages?limit=10&before=KxZ8a1bQ3rTqYpN2mJwL
-→ next page of results
-```
-
----
-
-### `POST /api/v1/chat/:chatId/message/:messageId/read`
-
-Mark a message as read by a user. This is **idempotent** — calling it multiple times is safe.
-
-**Request Body:**
-```json
-{
-  "user_id": "00000000-0000-0000-0000-000000000002"
-}
-```
-
-**Response `200`:**
-```json
-{
-  "success": true,
-  "data": {
-    "message_id": "KxZ8a1bQ3rTqYpN2mJwL",
-    "read_by": [
-      "00000000-0000-0000-0000-000000000001",
-      "00000000-0000-0000-0000-000000000002"
-    ]
-  }
-}
-```
-
----
-
-### `POST /api/v1/chat/:chatId/lastseen`
-
-Update a user's last-seen message ID within a chat (for unread count tracking).
-
-**Request Body:**
-```json
-{
-  "user_id": "00000000-0000-0000-0000-000000000002",
-  "message_id": "KxZ8a1bQ3rTqYpN2mJwL"
-}
-```
-
-**Response `200`:**
-```json
-{
-  "success": true,
-  "data": {
-    "chat_id": "f47ac10b-58cc-4372-a567-0e02b2c3d479",
-    "user_id": "00000000-0000-0000-0000-000000000002",
-    "last_seen_message_id": "KxZ8a1bQ3rTqYpN2mJwL"
-  }
-}
-```
-
----
-
-### `GET /api/v1/user/:userId/chats`
-
-List all chats for a user, including member details from PostgreSQL.
-
-**Response `200`:**
-```json
-{
-  "success": true,
-  "data": {
-    "user_id": "00000000-0000-0000-0000-000000000001",
+### 4. List User Chats
+- **Method**: `GET`
+- **Endpoint**: `/api/v1/user/:userId/chats`
+- **Response `200 OK`**:
+  ```json
+  {
+    "success": true,
     "chats": [
       {
-        "chat_id": "f47ac10b-58cc-4372-a567-0e02b2c3d479",
+        "chatId": "acb0aa2a-6cac-490f-bc1f-0c287f0a7d36",
+        "chatType": "ONE_TO_ONE",
         "members": [
-          "00000000-0000-0000-0000-000000000001",
-          "00000000-0000-0000-0000-000000000002"
+          "e19300cd-d492-429b-a6ee-d4a4f9651493",
+          "2149cbe3-a2d2-444e-9a42-342513770b15"
         ],
-        "joined_at": "2026-10-27T02:14:00.000Z",
-        "last_seen_message_id": "KxZ8a1bQ3rTqYpN2mJwL",
-        "created_at": "2026-10-27T02:14:00.000Z"
+        "createdAt": "2026-10-31T01:07:21.000Z"
       }
     ]
   }
-}
-```
+  ```
 
 ---
 
-### Error Responses
-
-All errors follow the same shape:
-
-```json
-{
-  "success": false,
-  "error": {
-    "code": "NOT_FOUND",
-    "message": "Chat abc not found",
-    "status": 404
+### 5. Send Message
+- **Method**: `POST`
+- **Endpoint**: `/api/v1/chat/:chatId/message/send`
+- **Behavior**: Verifies chat exists and sender is a member in MySQL; stores message in Cloud Firestore with server timestamp.
+- **Request Body**:
+  ```json
+  {
+    "senderId": "e19300cd-d492-429b-a6ee-d4a4f9651493",
+    "text": "Hello Bob!"
   }
-}
-```
+  ```
+- **Response `201 Created`**:
+  ```json
+  {
+    "success": true,
+    "message": "Message sent successfully",
+    "messageId": "R5pzLPTlruJPCOPeFqCo",
+    "data": {
+      "messageId": "R5pzLPTlruJPCOPeFqCo",
+      "chatId": "acb0aa2a-6cac-490f-bc1f-0c287f0a7d36",
+      "senderId": "e19300cd-d492-429b-a6ee-d4a4f9651493",
+      "text": "Hello Bob!",
+      "timestamp": "2026-10-31T01:07:22.000Z"
+    }
+  }
+  ```
 
-| Code | Status | Description |
-|---|---|---|
-| `VALIDATION_ERROR` | 400 | Invalid request body/params |
-| `UNAUTHORIZED` | 401 | Missing x-user-id header |
-| `FORBIDDEN` | 403 | User is not a chat member |
-| `NOT_FOUND` | 404 | Resource does not exist |
-| `CONFLICT` | 409 | Resource already exists |
-| `RATE_LIMIT_EXCEEDED` | 429 | Too many requests |
-| `INTERNAL_ERROR` | 500 | Unexpected server error |
+---
+
+### 6. Get Messages (with Pagination)
+- **Method**: `GET`
+- **Endpoint**: `/api/v1/chat/:chatId/messages?limit=50&userId=<uuid>&cursor=<msgId>`
+- **Query Parameters**:
+  - `limit`: Number of messages (default: 50, max: 100)
+  - `userId`: Member user UUID verifying access
+  - `cursor`: (Optional) Message ID to paginate after
+- **Behavior**: Queries Firestore `timestamp DESC` with limit + 1, reverses to chronological ascending order.
+- **Response `200 OK`**:
+  ```json
+  {
+    "success": true,
+    "messages": [
+      {
+        "messageId": "R5pzLPTlruJPCOPeFqCo",
+        "chatId": "acb0aa2a-6cac-490f-bc1f-0c287f0a7d36",
+        "senderId": "e19300cd-d492-429b-a6ee-d4a4f9651493",
+        "text": "Hello Bob!",
+        "timestamp": "2026-10-31T01:07:22.000Z"
+      }
+    ],
+    "hasMore": false,
+    "nextCursor": null
+  }
+  ```
+
+---
+
+### 7. Mark Message Read
+- **Method**: `POST`
+- **Endpoint**: `/api/v1/chat/:chatId/message/:messageId/read`
+- **Behavior**: Idempotent. Writes to `chats/{chatId}/messages/{messageId}/readReceipts/{userId}` without modifying the original message.
+- **Request Body**:
+  ```json
+  {
+    "userId": "2149cbe3-a2d2-444e-9a42-342513770b15"
+  }
+  ```
+- **Response `200 OK`** (first read: `isNew: true`, repeated read: `isNew: false`):
+  ```json
+  {
+    "success": true,
+    "message": "Message marked as read successfully",
+    "data": {
+      "chatId": "acb0aa2a-6cac-490f-bc1f-0c287f0a7d36",
+      "messageId": "R5pzLPTlruJPCOPeFqCo",
+      "userId": "2149cbe3-a2d2-444e-9a42-342513770b15",
+      "readAt": "2026-10-31T01:07:23.321Z",
+      "isNew": true
+    }
+  }
+  ```
+
+---
+
+### 8. Update Last Seen
+- **Method**: `POST`
+- **Endpoint**: `/api/v1/chat/:chatId/lastseen`
+- **Behavior**: Updates `chats/{chatId}/lastSeen/{userId}`. Enforces that last-seen cannot move backwards to an older message (returns `400 INVALID_LAST_SEEN_ORDER`).
+- **Request Body**:
+  ```json
+  {
+    "userId": "2149cbe3-a2d2-444e-9a42-342513770b15",
+    "messageId": "R5pzLPTlruJPCOPeFqCo"
+  }
+  ```
+- **Response `200 OK`**:
+  ```json
+  {
+    "success": true,
+    "message": "Last seen updated successfully",
+    "data": {
+      "chatId": "acb0aa2a-6cac-490f-bc1f-0c287f0a7d36",
+      "userId": "2149cbe3-a2d2-444e-9a42-342513770b15",
+      "messageId": "R5pzLPTlruJPCOPeFqCo",
+      "lastSeenAt": "2026-10-31T01:07:24.000Z"
+    }
+  }
+  ```
 
 ---
 
 ## Postman Collection
 
-Import `chat-backend.postman_collection.json` into Postman.
+Two Postman collections are provided:
 
-The collection includes:
-- Pre-built requests for all 6 endpoints
-- Auto-extraction of `chatId` and `messageId` into collection variables (via test scripts)
-- Edge case examples (validation error, 404)
+1. **`chat-backend-clean.postman_collection.json`** *(Final Assignment Submission)*:
+   - Contains the core endpoints organized into `Users`, `Chats`, and `Messages` folders.
+   - Provides explicit requests for creating both User A (`userAId`) and User B (`userBId`), creating their 1:1 chat, sending messages, paginated reading, read receipts, and last-seen tracking.
+   - Clean, sequential, and pre-configured for Postman Collection Runner.
 
-**Quick start flow:**
-1. Run **"1. Create or Retrieve Chat"** → `chatId` is auto-saved
-2. Run **"2. Send Message"** → `messageId` is auto-saved
-3. Run the remaining requests in order
+2. **`chat-backend.postman_collection.json`** *(Comprehensive Test Suite)*:
+   - Includes **38 automated test cases** covering all success paths, validation errors, duplicate chat prevention, 403 authorization checks, 404s, pagination, read receipt idempotency, and monotonic last-seen ordering.
 
 ---
 
 ## Project Structure
 
 ```
-chat-backend/
+codeForTomorrow/
+├── certs/                             # SSL CA and Firebase service account (gitignored)
+│   ├── ca.pem
+│   └── firebase-service-account.json
 ├── src/
 │   ├── config/
-│   │   ├── env.ts           # Environment variable loader
-│   │   └── firebase.ts      # Firebase Admin SDK init
+│   │   ├── env.ts                     # Validated environment configuration
+│   │   └── firebase.ts                # Firebase Admin SDK & collection helpers
 │   ├── controllers/
-│   │   └── chatController.ts # Request handlers (thin layer)
+│   │   ├── chatController.ts          # HTTP handlers for chat & messaging endpoints
+│   │   └── userController.ts          # HTTP handlers for user endpoints
 │   ├── database/
-│   │   ├── migrate.ts        # Migration runner
-│   │   ├── postgres.ts       # Pool + query helpers
-│   │   └── schema.sql        # Full DB schema
+│   │   ├── data-source.ts             # TypeORM DataSource initialization & SSL config
+│   │   └── sync.ts                    # Database schema synchronization script
+│   ├── entities/
+│   │   ├── Chat.ts                    # TypeORM Chat entity
+│   │   ├── ChatMember.ts              # TypeORM ChatMember entity (relational joins)
+│   │   ├── User.ts                    # TypeORM User entity
+│   │   └── index.ts
 │   ├── middleware/
-│   │   ├── auth.ts           # Auth middleware (header-based, JWT-ready)
-│   │   ├── errorHandler.ts   # Centralized error formatting
-│   │   └── validate.ts       # Joi validation factory
+│   │   ├── auth.ts                    # Authentication scaffolding (header-based)
+│   │   ├── errorHandler.ts            # Centralized error handler (no exposed stack traces)
+│   │   └── validate.ts                # Joi validation middleware
+│   ├── repositories/
+│   │   ├── chatRepository.ts          # TypeORM chat queries & transactions
+│   │   └── userRepository.ts          # TypeORM user queries
 │   ├── routes/
-│   │   └── chatRoutes.ts     # Route definitions with middleware
+│   │   └── chatRoutes.ts              # Central router definition for all 8 APIs
 │   ├── services/
-│   │   ├── chatService.ts    # PostgreSQL operations
-│   │   └── messageService.ts # Firestore operations
+│   │   ├── chatService.ts             # Chat business logic & membership assertions
+│   │   ├── messageService.ts          # Firestore messaging, pagination, receipts & last-seen
+│   │   └── userService.ts             # User creation & lookup logic
 │   ├── types/
-│   │   └── index.ts          # All TypeScript interfaces
+│   │   └── index.ts                   # Strict TypeScript interfaces & request/response types
 │   ├── utils/
-│   │   └── AppError.ts       # Custom error class
+│   │   ├── AppError.ts                # Custom operational error class
+│   │   └── mysqlErrors.ts             # MySQL error code translator (e.g. 1062 -> 409)
 │   ├── validators/
-│   │   └── schemas.ts        # Joi schemas
-│   ├── app.ts                # Express app factory
-│   └── server.ts             # Entry point + graceful shutdown
-├── .env.example
-├── .gitignore
-├── chat-backend.postman_collection.json
+│   │   └── schemas.ts                 # Joi input validation schemas
+│   ├── app.ts                         # Express application setup (Helmet, CORS, rate limiting)
+│   └── server.ts                      # Server bootstrap & graceful shutdown handling
+├── .env.example                       # Documented environment template with placeholders
+├── .gitignore                         # Strict exclusion for credentials, node_modules, and dist
+├── chat-backend.postman_collection.json # Comprehensive 38-request test collection
 ├── package.json
 ├── README.md
-└── tsconfig.json
+└── tsconfig.json                      # Strict TypeScript compiler configuration
 ```
 
 ---
 
-## Design Decisions
+## Security & Design Decisions
 
-### Duplicate chat prevention
-`findOrCreateChat` first does a JOIN query on `chat_members` to check for an existing chat between two users before inserting. This is safe under concurrent requests because PostgreSQL's `UNIQUE` constraint on `(chat_id, user_id)` prevents double-insertion.
-
-### Cursor-based pagination
-`GET /chat/:chatId/messages` uses Firestore's `startAfter(docSnapshot)` cursor instead of offset pagination. This is O(1) for any page depth, whereas offset pagination degrades with large datasets.
-
-### Read receipts with arrayUnion
-`markMessageRead` uses `FieldValue.arrayUnion(userId)` which is idempotent and atomic — no race conditions when multiple clients mark the same message read simultaneously.
-
-### Authentication architecture
-The `x-user-id` header-based auth is intentional scaffolding. Swapping it for JWT requires only editing `src/middleware/auth.ts` — all controllers already receive `req.user` the same way.
-
-### Strict TypeScript
-`noImplicitAny`, `strictNullChecks`, `noImplicitReturns` are all enabled. No `any` types are used in production code.
+1. **Credentials Isolation**: All private credentials (`certs/`, `.env`) are kept out of source control via `.gitignore`.
+2. **Strict Primary Keys**: Entity columns strictly define lengths and default timestamps compatible with MySQL's `sql_require_primary_key=ON`.
+3. **Deterministic 1:1 Chats**: Unique `conversation_key` (`min(userAId, userBId)_max(userAId, userBId)`) prevents race-condition chat duplicates.
+4. **Idempotency**:
+   - Creating an existing chat returns `200 OK` with the existing chat ID.
+   - Marking a message as read preserves the initial `readAt` timestamp and returns `isNew: false`.
+   - Updating last-seen to the current message succeeds without redundant writes.
+5. **Monotonic Last Seen**: Enforced ordering using Firestore server timestamps guarantees unread trackers never move backwards to an older message.
+6. **Information Disclosure Prevention**: Error payloads never leak internal stack traces or database driver internal details in API responses.

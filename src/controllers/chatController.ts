@@ -10,9 +10,16 @@
  */
 
 import { Request, Response, NextFunction } from 'express';
+import { AppError } from '../utils/AppError';
 import * as chatService from '../services/chatService';
 import * as messageService from '../services/messageService';
-import type { CreateChatRequest, SendMessageRequest } from '../types';
+import type {
+  CreateChatRequest,
+  SendMessageRequest,
+  GetMessagesQuery,
+  MarkMessageReadRequest,
+  UpdateLastSeenRequest,
+} from '../types';
 
 // ─── POST /api/v1/chat/create ────────────────────────────────────────────────
 
@@ -80,6 +87,87 @@ export async function sendMessage(
     const result = await messageService.sendMessage(chatId, senderId, text);
 
     res.status(201).json(result);
+  } catch (err) {
+    next(err);
+  }
+}
+
+// ─── GET /api/v1/chat/:chatId/messages ───────────────────────────────────────
+
+/**
+ * Get messages from a chat with cursor-based pagination.
+ * Verifies chat & requester membership in MySQL, then retrieves from Firestore.
+ */
+export async function getMessages(
+  req: Request<{ chatId: string }, unknown, unknown, GetMessagesQuery>,
+  res: Response,
+  next: NextFunction
+): Promise<void> {
+  try {
+    const { chatId } = req.params;
+    const { limit = 50, cursor, before, userId } = req.query;
+
+    const requesterId = userId || req.user?.id || (req.headers['x-user-id'] as string);
+    if (!requesterId) {
+      throw AppError.unauthorized(
+        'userId query parameter or x-user-id header is required to verify chat membership'
+      );
+    }
+
+    const result = await messageService.getMessages(chatId, requesterId, {
+      limit: Number(limit),
+      cursor: cursor || before,
+    });
+
+    res.status(200).json(result);
+  } catch (err) {
+    next(err);
+  }
+}
+
+// ─── POST /api/v1/chat/:chatId/message/:messageId/read ───────────────────────
+
+/**
+ * Mark a message as read by a chat participant.
+ * Verifies chat & participant membership in MySQL, message existence in Firestore,
+ * and records the read receipt idempotently.
+ */
+export async function markMessageRead(
+  req: Request<{ chatId: string; messageId: string }, unknown, MarkMessageReadRequest>,
+  res: Response,
+  next: NextFunction
+): Promise<void> {
+  try {
+    const { chatId, messageId } = req.params;
+    const { userId } = req.body;
+
+    const result = await messageService.markMessageRead(chatId, messageId, userId);
+
+    res.status(200).json(result);
+  } catch (err) {
+    next(err);
+  }
+}
+
+// ─── POST /api/v1/chat/:chatId/lastseen ──────────────────────────────────────
+
+/**
+ * Update the last seen message for a user in a chat.
+ * Verifies chat & participant membership in MySQL, message existence in Firestore,
+ * checks that message is not older than current last-seen, and updates lastSeen.
+ */
+export async function updateLastSeen(
+  req: Request<{ chatId: string }, unknown, UpdateLastSeenRequest>,
+  res: Response,
+  next: NextFunction
+): Promise<void> {
+  try {
+    const { chatId } = req.params;
+    const { userId, messageId } = req.body;
+
+    const result = await messageService.updateLastSeen(chatId, userId, messageId);
+
+    res.status(200).json(result);
   } catch (err) {
     next(err);
   }
